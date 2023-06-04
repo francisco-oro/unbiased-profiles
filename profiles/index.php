@@ -1,47 +1,56 @@
 <?php
     session_start();
-    require_once('pdo.php'); 
-
-    class profileTable 
+    // Render the database content to the web application 
+    class profilesTable 
     {
-        public function ($this, $array){
-            foreach ($variable as $key => $value) {
-                # code...
+        // The $admin variable is to tell the function wether the user has logged in or not
+        // The 'Action' column will be displayed only for registered users
+        private function rowHeadings(bool $admin){
+            echo("<thead class='thead-dark'>
+                    <tr>
+                        <th scope='col'>Name</th>
+                        <th scope='col'>Headline</th>");
+            if ($admin) {
+                echo "<th scope='col'>Action</th></tr>"; 
             }
+            echo("</thead>");
         }
-
-        private function display(array $row){
+        private function displayRow(array $row, bool $admin){
             echo "<tr class='bg-white'><td>";
-            echo(htmlentities($row['make']));
+            echo '<a href="view.php?profile_id='.$row['profile_id'].'">';
+            echo(htmlentities($row['first_name'])." ".htmlentities($row['last_name']));
+            echo '</a>'; 
             echo "</td><td>";
-            echo (htmlentities($row['model']));
-            echo "</td><td>";
-            echo (htmlentities($row['year']));
-            echo "</td><td>";
-            echo (htmlentities($row['mileage']));
-            echo "</td><td>";
-            echo "<a class='link-primary' href='edit.php?auto_id=".$row['auto_id']."'>Edit</a> / ";
-            echo "<a class='link-primary' href='delete.php?auto_id=".$row['auto_id']."'>Delete</a>";
+            echo (htmlentities($row['headline']));
+            if ($admin) {
+                echo "</td><td>";
+                echo "<a class='link-primary' href='edit.php?profile_id=".$row['profile_id']."'>Edit</a> / ";
+                echo "<a class='link-primary' href='delete.php?profile_id=".$row['profile_id']."'>Delete</a>";
+            }
             echo "</td></tr>";
         }
-
-        private function
-
-        public function displayRecords(){
+        public function displayRecords(bool $admin){
             require_once('pdo.php'); 
-            $stmt = $pdo->query('SELECT auto_id, make, year, mileage, model FROM autos ORDER BY make');
+            $stmt = $pdo->query('SELECT profile_id, first_name, last_name, headline FROM profiles ORDER BY first_name');
             if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                echo "<table border='2' class='table'>"; 
-                echo "<thead class='thead-dark'><tr><th scope='col'>Make</th><th scope='col'>Model</th><th scope='col'>Year</th><th scope='col'>Mileage</th><th scope='col'>Action</th></tr></thead>"; 
+                echo "<table border='2' class='table table-hover'>"; 
+                $this->rowHeadings($admin);
                 echo "<tbody>";
-                displayRow($row); 
+                $this->displayRow($row, $admin);
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    displayRow($row);
+                    $this->displayRow($row, $admin);
                 }
                 echo "</tbody>"; 
                 echo  "</table>";
             } else {
                 echo "<p>No rows found</p><br/>"; 
+            }
+
+            if($admin){
+                echo '<a style="color:blue;" href="add.php">Add New Entry</a> <br/>';
+                echo '<a style="color:blue;" href="logout.php">Logout</a>';
+            } else {
+                echo "<a style='color:blue;' href='login.php'>Please log in</a>";
             }
         }
     }
@@ -60,6 +69,21 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Francisco Abimael Oro Estrada's Resume Registry</h1>
+    <div class="text-white text-center w-100 p-5">
+        <h1>Francisco Oro's Resume Registry</h1>
+        <?php
+            if (isset($_SESSION['success'])) {
+                echo('<p class="bg-success">'.htmlentities($_SESSION['success'])."</p>\n");
+                unset($_SESSION['success']); 
+            }
+
+            if (isset($_SESSION['error'])) {
+                echo('<p class="bg-danger">'.htmlentities($_SESSION['error'])."</p>\n");
+                unset($_SESSION['error']); 
+            }
+            $table = new profilesTable;
+            $table->displayRecords(isset($_SESSION['user_id']));
+        ?>
+    </div>
 </body>
 </html>

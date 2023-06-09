@@ -36,19 +36,29 @@
 
         /* Check if position data has been added and discard
         bad inputs */
-        $msg = validatePos();
-        if(is_string($msg)){
-            $_SESSION['error'] = $msg;
+        $position_status = validateFields('desc', 'year');
+        if(is_string($position_status)){
+            $_SESSION['error'] = $position_status;
+            header('Location: add.php');
+            return;
+        }
+
+        /* Check if education data has been added and discard
+        bad inputs */
+        $education_status = validateFields('edu_school', 'edu_year');
+        if(is_string($education_status)){
+            $_SESSION['error'] = $$education_status;
             header('Location: add.php');
             return;
         }
     
-        // Start the query from the database 
-        echo($_POST['user_id']);
+        // Data is valid - time to insert into the database
+        
+        // Profiles table
         $stmt = $pdo->prepare('INSERT INTO profiles(user_id, first_name, last_name, email, headline, summary) 
         VALUES (:uid, :fn, :ln, :em, :hd, :sm)'); 
         $stmt->execute(array (
-             ':uid' => (int)($_POST['user_id']),
+             ':uid' => $_SESSION['user_id'],
              ':fn' => $_POST['first_name'],
              ':ln' => $_POST['last_name'],
              ':em' => $_POST['email'],
@@ -57,7 +67,7 @@
          ));
          $profile_id = $pdo->lastInsertId();
 
-        // Data is valid - time to insert into the database
+        // Positions table
         $rank = 1; 
         for ($i=1; $i <= 9; $i++) { 
             if(!isset($_POST['year'.$i])) continue;
@@ -73,6 +83,26 @@
             ));
             $rank++;
         }
+
+        
+        // Education table
+        $rank = 1; 
+        for ($i=1; $i < 9; $i++) { 
+            if(!isset($_POST['edu_year'.$i])) continue;
+            if(!isset($_POST['edu_school'.$i])) continue; 
+            /* Check if the institution already exists. Otherwise, insert the new name into the database and 
+            retrieve the institution id from it */
+            $institution_id = getSchool_id($_POST['edu_school'.$i], $pdo);
+            $year = $_POST['edu_year'.$i];
+            $stmt = $pdo->prepare('INSERT INTO education(institution_id, profile_id, rank, year) VALUES (:ins_id, :pid, :rank, :year)');
+            $stmt->execute(array(
+                ":ins_id" => $institution_id,
+                ":pid" => $profile_id,
+                ":rank" => $rank, 
+                ":year" => $year
+            ));
+            $rank++;
+        }
         // Record inserted. Leaving add.php
         $_SESSION['success'] = "Added";
          header('Location: index.php');
@@ -80,18 +110,14 @@
     }
 
 ?>
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Francisco Abimael Oro Estrada's Profiles Database</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <link rel="stylesheet" href="style.css">
-    <script src="https://code.jquery.com/jquery-3.2.1.js" integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE=" crossorigin="anonymous"></script>
-    <script type='text/javascript' src="script.js"></script>
-    <?php require_once('utilities.php'); ?> 
+    <?php require_once('head.php'); ?> 
 </head>
 <body>
     <div class="text-white text-center w-100 p-5">
@@ -107,11 +133,15 @@
             <input type="text" name="headline" id="hd">
             <label for="sm">Summary: </label>
             <textarea name="summary" id="sm" cols="30" rows="10"></textarea>
+            <label for="addEdu">Education: </label>
+            <input class="btn btn-light m-2 w-50" type="submit" name="addEdu" id="addEdu" value="+">
+            <div class="w-100" id="education_fields">
+
+            </div>
             <label for="addPos">Position: </label>
             <input class="btn btn-light m-2 w-50" type="submit" name="addPos" id="addPos" value="+">
-            <input type="hidden" class="btn btn-light m-2 w-50" name="user_id" value="<?= $_SESSION['user_id']?>">
-            <div id="position_fields" class="w-100 ">
-                
+            <div class="w-100" id="position_fields">
+
             </div>
             
             <div class='d-flex flex-row position-relative m-auto w-100'>
@@ -119,9 +149,11 @@
                 <input class="btn btn-light m-2 w-50" type="submit" name="cancel" value="Cancel">
             </div>
         </form>
+
         <script type="text/javascript">
-            countPos = 0;
             $(document).ready(function() {
+                countPos = 0;
+                countEdu = 0;
                 // Look up the element with addPos as its id
                 $('#addPos').click(function (event) {
                     // Always return false throught the code
@@ -129,7 +161,7 @@
                     /* Global variable to keep of how many positions
                     have been inserted */
                     if (countPos >= 9) {
-                        ("Maximum of nine position entries exceeded");
+                        alert("Maximum of nine position entries exceeded");
                         return;
                     }
                     // Increment countPos as new fields are added
@@ -137,15 +169,48 @@
                     // Display current position to the console
                     window.console && console.log("Adding postion "+countPos)
                     // Append a new position inside the position_fields div
-                    $('#position_fields').append(
-                        "<div id='position"+countPos+"' class='p-relative'> \
-                        <p> Year: <input type='text' name='year"+countPos+"' value ='' /> \
-                        <input type='button' value='-' \
-                        onclick = '$(\"#position"+countPos+"\").remove(); return false;'></p> \
-                        <textarea name='desc"+countPos+"' rows='8' cols='80'></textarea>\
-                        </div>"); 
+                    var source = $('#pos-template').html();
+                    $('#position_fields').append(soure.replace(/@COUNT@/, countPos)); 
                 });
+
+                $('#addEdu').click(function (event) {
+                    event.preventDefault();
+
+                    if (countEdu >=9) {
+                        alert("Maximum of nine education entries exceeded");
+                        return; 
+                    }
+                    countEdu++;
+                    window.console && console.log('Adding education' + countEdu);
+                    // Grab some HTML from the edu container template and insert it in the DOM 
+                    var source = $('#edu-template').html();
+                    $('#education_fields').append(source.replace(/@COUNT@/g, countEdu));
+
+                    $('.school').autocomplete({source : 'school.php'}); 
+                })
+                $('.school').autocomplete({source : 'school.php'}); 
             });
+        </script>
+        <!-- HTML with substitution hotspots -->
+        <script id='edu-template' type="text">
+            <div id='edu@COUNT@'>
+                <p>Year:
+                    <input type="text" name='edu_year@COUNT@' value=''>
+                    <input type="button" value='-' onclick='$("#edu@COUNT@").remove(); return false;'>
+                </p>
+                <p>School:
+                    <input type="text" name="edu_school@COUNT@" class="school ui-autocomplete-input" size="80">
+                </p>
+            </div>
+        </script>
+        <script id='pos-template' type="text">
+            <div id='position@COUNT@'>
+                <p>Year:
+                    <input type="text" name='year@COUNT@' value=''>
+                    <input type="button" value='-' onclick='$("#position@COUNT@").remove(); return false;'>
+                </p>
+                <textarea name="desc@COUNT@" cols="80" rows="8"></textarea>
+            </div>
         </script>
     </div>
 </body>
